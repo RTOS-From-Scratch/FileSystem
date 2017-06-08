@@ -18,6 +18,7 @@
 #include "ff.h"
 #include "tm4c123gh6pm.h"
 #include <stdlib.h>
+#include "Drivers/src/time.h"
 
 #define __SD_TYPE_NONE   0
 #define __SD_TYPE_SDHC   1
@@ -76,20 +77,6 @@ byte cardType = __SD_TYPE_NONE;
 #define SD_READ_TIMEOUT 300
 /* write time out ms */
 #define SD_WRITE_TIMEOUT 600
-
-static void Delay1ms(unsigned long msec)
-{
-// write this function
-    unsigned long counter;
-
-    while( msec > 0 )
-    {
-        counter = SYS_CLK_SPEED / 10000;
-        while(counter-- > 0);
-        msec--;
-    }
-}
-
 
 /*************************************************************************/
 //static void SPI_sendByte( byte data )
@@ -319,7 +306,7 @@ static byte SD_send_cmd(byte cmd, uint32_t arg)
 
 static void powerOn()
 {
-    Delay1ms(10);
+    delay_msec(10);
 
     // initialize SPI
 //    SPI_driver = Driver_construct(SPI, spi_module);

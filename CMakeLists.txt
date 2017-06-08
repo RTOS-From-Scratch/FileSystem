@@ -55,7 +55,7 @@ SET(CMAKE_ASM_COMPILER ${ARM_TOOLCHAIN_BIN_PATH}/arm-none-eabi-as CACHE STRING "
 #################################################################
 
 ################# check important files existance ################
-if(${RFS_${PROJECT_NAME}})
+if(${RFS_TESTING_${PROJECT_NAME}})
     # check `tm4c123gh6pm.lds` existance
     if( NOT EXISTS ${PROJ_PATH}/tm4c123gh6pm.lds)
         MESSAGE(FATAL_ERROR "Can't find `tm4c123gh6pm.lds` linker file in ${PROJ_PATH}.")
@@ -65,7 +65,7 @@ if(${RFS_${PROJECT_NAME}})
     if( NOT EXISTS ${PROJ_PATH}/startup.c )
         MESSAGE(FATAL_ERROR "Can't find `startup.c` file in ${PROJ_PATH}.")
     endif( NOT EXISTS ${PROJ_PATH}/startup.c )
-endif(${RFS_${PROJECT_NAME}})
+endif(${RFS_TESTING_${PROJECT_NAME}})
 
 # check `tm4c123gh6pm.h` existance
 if( NOT EXISTS ${PROJ_PATH}/tm4c123gh6pm.h )
@@ -75,7 +75,7 @@ endif( NOT EXISTS ${PROJ_PATH}/tm4c123gh6pm.h )
 
 ############################# Network ############################
 # connect other parts to this part from RFS
-if(${RFS_${PROJECT_NAME}})
+if(${RFS_TESTING_${PROJECT_NAME}})
     SET( ${PROJECT_NAME}_NetworkSources ../Drivers/src/SPI.c
                                         ../Drivers/src/GPIO.c
                                         ../Drivers/src/UART.c
@@ -84,7 +84,7 @@ if(${RFS_${PROJECT_NAME}})
                                         ../Drivers/src/inner/__ISR_vectortable.c
                                         ../Misc/src/inner/__assert.c
                                         )
-endif(${RFS_${PROJECT_NAME}})
+endif(${RFS_TESTING_${PROJECT_NAME}})
 ##################################################################
 
 ######################## My Sources files #######################
@@ -101,11 +101,11 @@ FILE(GLOB_RECURSE ${PROJECT_NAME}_Headers ${CMAKE_SOURCE_DIR}/*.h ${CMAKE_LIBRAR
 # other sources
 SET ( Other_${PROJECT_NAME}_Sources ${PROJ_PATH}/tm4c123gh6pm.h )
 # if in testing mode, add `main.c` and `startup.c`
-if(${RFS_${PROJECT_NAME}})
+if(${RFS_TESTING_${PROJECT_NAME}})
     SET( ${PROJECT_NAME}_main ${PROJ_PATH}/main.c )
     SET( Other_${PROJECT_NAME}_Sources ${Other_${PROJECT_NAME}_Sources} ${PROJ_PATH}/startup.c )
     FILE(GLOB_RECURSE ${PROJECT_NAME}_LIBS ${CMAKE_LIBRARY_PATH}/*.a )
-endif(${RFS_${PROJECT_NAME}})
+endif(${RFS_TESTING_${PROJECT_NAME}})
 SET (${PROJECT_NAME}_Sources ${${PROJECT_NAME}_CSources}
                              ${${PROJECT_NAME}_CppSources}
                              ${${PROJECT_NAME}_ASMSources}
@@ -135,7 +135,7 @@ set_property(SOURCE ${${PROJECT_NAME}_ASMSources} PROPERTY LANGUAGE C)
 ## into #include "DataStructures/src/queue.h"
 include_directories(${PROJ_PATH} ..)
 
-if(${RFS_${PROJECT_NAME}})
+if(${RFS_TESTING_${PROJECT_NAME}})
     add_executable(${PROJECT_NAME}.elf ${${PROJECT_NAME}_Sources})
     # link the output with the libraries in `lib` folder
     target_link_libraries(${PROJECT_NAME}.elf ${${PROJECT_NAME}_LIBS})
@@ -146,31 +146,31 @@ if(${RFS_${PROJECT_NAME}})
     add_custom_command(TARGET ${PROJECT_NAME}.elf POST_BUILD COMMAND ${ARM_TOOLCHAIN_BIN_PATH}/arm-none-eabi-objcopy ARGS -O binary ${PROJECT_NAME}.elf ${PROJECT_NAME}.hex)
     add_custom_target(upload lm4flash ${PROJECT_NAME}.hex DEPENDS ${PROJECT_NAME}.elf COMMENT "Uploading ...")
 # else, this build without linking
-else(${RFS_${PROJECT_NAME}})
+else(${RFS_TESTING_${PROJECT_NAME}})
     add_library(${PROJECT_NAME} OBJECT ${${PROJECT_NAME}_Sources})
-endif(${RFS_${PROJECT_NAME}})
+endif(${RFS_TESTING_${PROJECT_NAME}})
 #################################################################
 
 ######################### CMake options #########################
 # option for build and then upload
-SET(RFS_BUILD_AND_UPLOAD False CACHE BOOL "Build then upload")
-if(RFS_BUILD_AND_UPLOAD)
+SET(RFS_TESTING_BUILD_AND_UPLOAD False CACHE BOOL "Build then upload")
+if(RFS_TESTING_BUILD_AND_UPLOAD)
     message(STATUS "Uploading...")
     add_custom_command(TARGET ${PROJECT_NAME}.elf POST_BUILD COMMAND lm4flash ARGS ${PROJECT_NAME}.hex)
-endif(RFS_BUILD_AND_UPLOAD)
+endif(RFS_TESTING_BUILD_AND_UPLOAD)
 
 # option for `testing parts of RFS`
-SET(RFS_${PROJECT_NAME} False CACHE BOOL "Turn on testing - include main.c")
-if(${RFS_${PROJECT_NAME}})
+SET(RFS_TESTING_${PROJECT_NAME} False CACHE BOOL "Turn on testing - include main.c")
+if(${RFS_TESTING_${PROJECT_NAME}})
     message(STATUS "---------------------")
     message(STATUS "| Testing is ON ... |")
     message(STATUS "---------------------")
-endif(${RFS_${PROJECT_NAME}})
+endif(${RFS_TESTING_${PROJECT_NAME}})
 #################################################################
 
 ######################### clear config ##########################
 # list of files that will be cleaned as a part of "make clean" stage
-if(${RFS_${PROJECT_NAME}})
+if(${RFS_TESTING_${PROJECT_NAME}})
     set_property(DIRECTORY APPEND PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${PROJECT_NAME}.hex ${PROJECT_NAME}.map)
 
     file ( WRITE ${CMAKE_BINARY_DIR}/clean-cmake-files.cmake
@@ -196,5 +196,5 @@ if(${RFS_${PROJECT_NAME}})
     COMMAND ${CMAKE_BUILD_TOOL} clean
     COMMAND ${CMAKE_COMMAND} -P ${CMAKE_BINARY_DIR}/clean-cmake-files.cmake
     )
-endif(${RFS_${PROJECT_NAME}})
+endif(${RFS_TESTING_${PROJECT_NAME}})
 #################################################################
