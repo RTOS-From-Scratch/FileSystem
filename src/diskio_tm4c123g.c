@@ -27,8 +27,9 @@
 
 // TODO: need to be set from CMake
 #define spi_module SPI0
-DSTATUS cardState = STA_NOINIT;
-byte cardType = __SD_TYPE_NONE;
+static SPI_Driver* spi_driver = NULL;
+static DSTATUS cardState = STA_NOINIT;
+static byte cardType = __SD_TYPE_NONE;
 
 /* Definitions for MMC/SDC command */
 #define CMD0                        (0x40+0)    /* GO_IDLE_STATE - init card in spi mode if CS low */
@@ -119,8 +120,8 @@ byte cardType = __SD_TYPE_NONE;
 static void connect_SD_to_SPI()
 {
 //    SPI_releaseBus();
-//    SPI_setChipSelectState( spi_module, HIGH );
-//    __SPI_setMOSI( spi_module, HIGH );
+//    SPI_setChipSelectState( spi_driver, HIGH );
+//    __SPI_setMOSI( spi_driver, HIGH );
 
     /* TODO: Switch the SPI TX line to a GPIO and drive it high too. */
 //    GPIO_PORTA_AFSEL_R &= ~0b10000;
@@ -131,7 +132,7 @@ static void connect_SD_to_SPI()
      * times to get the SD Card into SPI mode.
      */
     for (int iii = 0; iii < 10; iii++)
-        SPI_transfer(spi_module, 0xFF);
+        SPI_transfer(spi_driver, 0xFF);
 
 //    Delay1ms(10);
 
@@ -151,7 +152,7 @@ static bool SD_waitForToken( byte token, int timeout )
 //    SPI_transfer( SPI_driver, 0xFF);
 
     do{
-        result = SPI_transfer(spi_module, 0xFF);
+        result = SPI_transfer(spi_driver, 0xFF);
 //        Delay1ms(timeout);
         counter++;
     } while( (result is_not token) and (counter < timeout) );
@@ -169,7 +170,7 @@ static bool SD_dataBlock_recieve(byte* buffer, size_t len)
 //    do {
 ////         TODO: timeout = 100 ms
 ////         send dummy data
-//        token = SPI_transfer( spi_module, 0xFF );
+//        token = SPI_transfer( spi_driver, 0xFF );
 //    } while(token == 0xFF);
 
 //    if(token != DATA_START_BLOCK)
@@ -182,7 +183,7 @@ static bool SD_dataBlock_recieve(byte* buffer, size_t len)
         return false;
 
     do {
-        *(buffer++) = SPI_transfer( spi_module, 0xFF );
+        *(buffer++) = SPI_transfer( spi_driver, 0xFF );
     } while(--len);
 
 //    for( uint16_t iii = 0; iii < len; ++iii )
@@ -191,8 +192,8 @@ static bool SD_dataBlock_recieve(byte* buffer, size_t len)
 //    }
 
     /* discard CRC */
-    SPI_transfer( spi_module, 0xFF );
-    SPI_transfer( spi_module, 0xFF );
+    SPI_transfer( spi_driver, 0xFF );
+    SPI_transfer( spi_driver, 0xFF );
 
 //    SPI_setChipSelectState( SPI_driver, HIGH );
 
@@ -207,37 +208,38 @@ static bool SD_dataBlock_recieve(byte* buffer, size_t len)
  */
 static bool SD_dataBlock_send(const byte *buffer, byte token)
 {
-    uint8_t counter = 0;
+//    uint8_t counter = 0;
     byte response;
 
     if( SD_waitForToken(0xFF, 500) is false )
         return false;
 
-    SPI_transfer( spi_module, token );
+    SPI_transfer( spi_driver, token );
 
     /* Send data only when token != STOP_TRAN_TOKEN */
-    if (token != STOP_TRAN_TOKEN)
+    if (token is_not STOP_TRAN_TOKEN)
     {
         /* Transferring 512 byte blocks using a 8 bit counter */
-        do {
-            SPI_transfer( spi_module, *buffer++ );
-            SPI_transfer( spi_module, *buffer++ );
-        } while(--counter);
-//        for(uint16_t iii = 0; iii < 512; iii++)
-//        {
-//            SPI_transfer( spi_module, buffer[iii] );
-//        }
+//        do {
+//            SPI_transfer( spi_driver, *buffer++ );
+//            SPI_transfer( spi_driver, *buffer++ );
+//        } while(--counter);
+
+        for(uint16_t iii = 0; iii < 512; iii++)
+        {
+            SPI_transfer( spi_driver, buffer[iii] );
+        }
 
         /* discard CRC */
-        SPI_transfer( spi_module, 0xFF );
-        SPI_transfer( spi_module, 0xFF );
+        SPI_transfer( spi_driver, 0xFF );
+        SPI_transfer( spi_driver, 0xFF );
 
         // Reveive data response
-        response = SPI_transfer( spi_module, 0xFF );
+        response = SPI_transfer( spi_driver, 0xFF );
 
-        if( (response & DATA_RES_MASK) != DATA_RES_ACCEPTED )
+        if( (response & DATA_RES_MASK) is_not DATA_RES_ACCEPTED )
         {
-            SPI_setChipSelectState( spi_module, HIGH );
+            SPI_setChipSelectState( spi_driver, HIGH );
             return false;
         }
     }
@@ -252,7 +254,7 @@ static byte SD_send_cmd(byte cmd, uint32_t arg)
     byte result;
 
     // select the card
-    SPI_setChipSelectState(spi_module, LOW);
+    SPI_setChipSelectState(spi_driver, LOW);
 //    Delay1ms(1);
 
     // wait up to 300 ms if busy
@@ -269,17 +271,17 @@ static byte SD_send_cmd(byte cmd, uint32_t arg)
       // Select the card and wait for ready except to stop multiple block read
 //     if (cmd != CMD12)
 //         SD_waitForToken(0xFF);
-//    SPI_transfer(spi_module, 0xFF);
+//    SPI_transfer(spi_driver, 0xFF);
 //    Delay1ms(10);
-//    SPI_transfer(spi_module, 0xFF);
-//    SPI_transfer(spi_module, 0xFF);
+//    SPI_transfer(spi_driver, 0xFF);
+//    SPI_transfer(spi_driver, 0xFF);
 
     // send packet data
-    SPI_transfer( spi_module, cmd );                // send commnad
-    SPI_transfer( spi_module, (byte)(arg >> 24) );  // arg[31..24]
-    SPI_transfer( spi_module, (byte)(arg >> 16) );  // arg[23..16]
-    SPI_transfer( spi_module, (byte)(arg >> 8) );   // arg[15..8]
-    SPI_transfer( spi_module, (byte)(arg) );        // arg[7..0]
+    SPI_transfer( spi_driver, cmd );                // send commnad
+    SPI_transfer( spi_driver, (byte)(arg >> 24) );  // arg[31..24]
+    SPI_transfer( spi_driver, (byte)(arg >> 16) );  // arg[23..16]
+    SPI_transfer( spi_driver, (byte)(arg >> 8) );   // arg[15..8]
+    SPI_transfer( spi_driver, (byte)(arg) );        // arg[7..0]
 
     if(cmd is CMD0)
         CRC = 0x95;
@@ -288,16 +290,16 @@ static byte SD_send_cmd(byte cmd, uint32_t arg)
     else
         CRC = 0xFF;
 
-    SPI_transfer( spi_module, CRC );
+    SPI_transfer( spi_driver, CRC );
 
     // Receive command response
     if(cmd == CMD12)
         // skip a byte
-        SPI_transfer( spi_module, 0xFF );
+        SPI_transfer( spi_driver, 0xFF );
 
     counter = 0xFF;
     do {
-        result = SPI_transfer( spi_module, 0xFF );
+        result = SPI_transfer( spi_driver, 0xFF );
 //        Delay1ms(1);
     } while( (result & 0x80) && --counter );
 
@@ -309,31 +311,31 @@ static void powerOn()
     delay_msec(10);
 
     // initialize SPI
-//    SPI_driver = Driver_construct(SPI, spi_module);
 //    SPI_driver = malloc(sizeof(Driver));
 //    SPI_driver->driverName = SPI;
-//    SPI_driver->module = spi_module;
+//    SPI_driver->module = spi_driver;
 //    SPI_driver->config = 0;
 //    SPI_driver->port = -1;
 
-    SPI_initAsMaster( spi_module, SPI_SPEED_NOCONFIG, false );
+    spi_driver = Driver_construct(SPI, spi_module);
+    SPI_initAsMaster( spi_driver, SPI_SPEED_NOCONFIG, false );
 
     // set CS High
     // NOTE: this can be done even without SPI be enabled
-    SPI_setChipSelectState(spi_module, HIGH);
-//    __SPI_setMOSI(spi_module, HIGH);
+    SPI_setChipSelectState(spi_driver, HIGH);
+//    __SPI_setMOSI(spi_driver, HIGH);
 
     /*
      * Configure the SPI bus to 400 kHz as required per SD specs. This frequency
      * will be adjusted later once the SD card has been successfully initialized
      */
     // TODO: MSB first
-    SPI_setClkSpeedManually(spi_module, 250E3);
+    SPI_setClkSpeedManually(spi_driver, 250E3);
 //    GPIO_PORTA_PUR_R  |= 0b01000;
 //    GPIO_PORTA_ODR_R  |= 0b10000;
 //    GPIO_PORTA_DR4R_R |= 0b11110;
 
-    SPI_enable(spi_module);
+    SPI_enable(spi_driver);
 
 //    Delay1ms(1);
 
@@ -391,7 +393,7 @@ DSTATUS disk_initialize (
     powerOn();
 
 //    SPI_transfer( SPI_driver, 0xFF );
-    SPI_setChipSelectState(spi_module, LOW);
+    SPI_setChipSelectState(spi_driver, LOW);
 //    SPI_holdBus();
 
     // send CMD0 -> put SD card in `IDLE` state
@@ -407,7 +409,7 @@ DSTATUS disk_initialize (
         {
             // SDC Ver2+
             for( byte iii = 0; iii < 4; iii++ )
-                OCR[iii] = SPI_transfer( spi_module, 0xFF );
+                OCR[iii] = SPI_transfer( spi_driver, 0xFF );
 
             /*
              * Ensure that the card's voltage range is valid
@@ -431,7 +433,7 @@ DSTATUS disk_initialize (
                 if( SD_send_cmd(CMD58, 0) is 0 )
                 {
                     for( byte iii = 0; iii < 4; iii++ )
-                        OCR[iii] = SPI_transfer( spi_module, 0xFF);
+                        OCR[iii] = SPI_transfer( spi_driver, 0xFF);
 
                     cardType = (OCR[0] & 0x40) ? __SD_TYPE_SDHC : __SD_TYPE_SDSC;
                 }
@@ -478,17 +480,17 @@ DSTATUS disk_initialize (
 //    SPI_releaseBus();
 
     // IDLE (Release D0)
-//    SPI_transfer( spi_module, 0xFF );
+//    SPI_transfer( spi_driver, 0xFF );
 
     // Check to see if a card type was determined
     if(cardType is_not __SD_TYPE_NONE)
     {
-        SPI_setClkSpeedManually(spi_module, 8E6);
-//        SPI_setClkSpeed(spi_module, SPI_SPEED_FULL);
+        SPI_setClkSpeedManually(spi_driver, 8E6);
+//        SPI_setClkSpeed(spi_driver, SPI_SPEED_FULL);
         cardState &= ~STA_NOINIT;
     }
 
-    SPI_setChipSelectState(spi_module, HIGH);
+    SPI_setChipSelectState(spi_driver, HIGH);
 
     return cardState;
 }
@@ -523,7 +525,7 @@ DRESULT disk_read (
     if( cardType is_not __SD_TYPE_SDHC )
         sector *= SD_SECTOR_SIZE;
 
-//    SPI_setChipSelectState( spi_module, LOW );
+//    SPI_setChipSelectState( spi_driver, LOW );
 //    SPI_holdBus();
 //    Delay1ms(5);
 
@@ -551,11 +553,11 @@ DRESULT disk_read (
         }
     }
 
-    SPI_setChipSelectState( spi_module, HIGH );
+    SPI_setChipSelectState( spi_driver, HIGH );
 //        SPI_releaseBus();
 
         // Idle (Release D0);
-//    SPI_transfer( spi_module, 0xFF );
+//    SPI_transfer( spi_driver, 0xFF );
 
     return (count ? RES_ERROR : RES_OK);
 }
@@ -592,7 +594,7 @@ DRESULT disk_write (
     if( cardType is_not __SD_TYPE_SDHC )
         sector *= SD_SECTOR_SIZE;
 
-//    SPI_setChipSelectState( spi_module, LOW );
+//    SPI_setChipSelectState( spi_driver, LOW );
 //    SPI_holdBus();
 
     // single block read
@@ -626,11 +628,11 @@ DRESULT disk_write (
         }
     }
 
-    SPI_setChipSelectState( spi_module, HIGH );
+    SPI_setChipSelectState( spi_driver, HIGH );
 //        SPI_releaseBus();
 
         // Idle (Release D0);
-//    SPI_transfer( spi_module, 0xFF);
+//    SPI_transfer( spi_driver, 0xFF);
 
     return (count ? RES_ERROR : RES_OK);
 }
@@ -655,7 +657,7 @@ DRESULT disk_ioctl (
     if(cardState and STA_NOINIT)
         return RES_NOTRDY;
 
-//    SPI_setChipSelectState(spi_module, LOW);
+//    SPI_setChipSelectState(spi_driver, LOW);
 //    SPI_holdBus();
 
     switch(cmd)
@@ -709,11 +711,11 @@ DRESULT disk_ioctl (
             break;
     }
 
-    SPI_setChipSelectState( spi_module, HIGH );
+    SPI_setChipSelectState( spi_driver, HIGH );
 //    SPI_releaseBus();
 
     // Idle
-//    SPI_transfer( spi_module, 0xFF);
+//    SPI_transfer( spi_driver, 0xFF);
 
     return result;
 }
